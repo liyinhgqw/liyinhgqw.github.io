@@ -156,3 +156,6 @@ package <empty> {
 {% endhighlight %}
 
 The outer object is not passed by. The object's member variable is used in the closure.
+
+
+Keywords:  scala 闭包，序列化
