@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- Niklas Buschmann 2015 MIT <http://github.com/niklasbuschmann> -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    
+    <meta name="description" content="Life beyond code">
+    <title> Scala Closure's True Self › Beyond Code</title>
+    <link rel="canonical" href="http://liyinhgqw.github.io/scala/2016/07/03/scala_closure.html">
+    <link href="/main.css" rel="stylesheet" type="text/css">
+    <link href='//fonts.googleapis.com/css?family=Source+Sans+Pro:200,300,400,600,700,200italic,300italic,400italic,600italic,700italic' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Gentium+Basic:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+    <link href='//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css' rel='stylesheet' type='text/css'>
+    <link type="application/atom+xml" rel="alternate" href="http://liyinhgqw.github.io/feed.xml" title="Beyond Code" />
+    <script src="//???.disqus.com/embed.js" async></script>
+    
+  </head>
+  <body>
+    <header>
+      <h1><a href="/">Beyond Code</a></h1>
+      <nav>
+        <ul>
+          <li><a href="/">Home</a></li><li><a href="/archive.html">Archive</a></li>
+        </ul>
+      </nav>
+    </header>
+    
+    
+    <article>
+      <header>
+        <h2><a href="/scala/2016/07/03/scala_closure.html">Scala Closure's True Self</a></h2>
+        <p><time datetime="2016-07-03T00:00:00+00:00">Jul 3, 2016</time> • scala</p>
+      </header>
+      <div>
+<p>When I write spark program, I often deal with transformation functions. These functions need to be serialized to enable parallelization. Scala uses lamda closure as syntax suger to write transformation functions. But it really frustrates me when the closure cannot be serialized which causes runtime failure of spark program.</p>
+
+<h2 id="example-code-snippet">Example code snippet</h2>
+<p>In order to figure out the true self of <strong><em>scala closure</em></strong>, take the following code snippet as an <a href="http://stackoverflow.com/questions/2670350/how-are-scala-closures-transformed-to-java-objects">example</a>.</p>
+
+<figure class="highlight"><pre><code class="language-scala" data-lang="scala"><span class="k">class</span> <span class="nc">Close</span> <span class="o">{</span>
+  <span class="k">var</span> <span class="n">n</span> <span class="k">=</span> <span class="mi">5</span>
+  <span class="k">def</span> <span class="n">method</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=</span> <span class="n">i</span><span class="o">+</span><span class="n">n</span>
+  <span class="k">def</span> <span class="n">function</span> <span class="k">=</span> <span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">i</span><span class="o">+</span><span class="mi">5</span>
+  <span class="k">def</span> <span class="n">closure</span> <span class="k">=</span> <span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">i</span><span class="o">+</span><span class="n">n</span>
+  <span class="k">def</span> <span class="n">mixed</span><span class="o">(</span><span class="n">m</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=</span> <span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">i</span><span class="o">+</span><span class="n">m</span>
+<span class="o">}</span></code></pre></figure>
+
+<h2 id="methods-to-dig-into-the-secret">Methods to dig into the secret</h2>
+<p>There is something we should know when debuging scala program. Sometimes we need to find out the java code it transform to or even byte code that is compiled to.</p>
+
+<ul>
+  <li><strong>source code -&gt; class</strong>:</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">    <span class="nv">$ </span>scalac Class.scala</code></pre></figure>
+
+<ul>
+  <li><strong>source code -&gt; class (with syntax tree parsed info printed)</strong>:</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">    <span class="nv">$ </span>scalac -Xprint:all Class.scala</code></pre></figure>
+
+<ul>
+  <li><strong>class -&gt; decompiled signature</strong>:</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">    <span class="nv">$ </span>scalap / javap Class</code></pre></figure>
+
+<ul>
+  <li><strong>class -&gt; byte code</strong>:</li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">    <span class="nv">$ </span>javap -c Class</code></pre></figure>
+
+<h2 id="parsed-syntax-tree-reveals-the-truth">Parsed syntax tree reveals the truth</h2>
+<p>The syntax tree of the example class is as follows:</p>
+
+<figure class="highlight"><pre><code class="language-scala" data-lang="scala"><span class="k">package</span> <span class="err">&lt;</span><span class="nn">empty</span><span class="o">&gt;</span> <span class="o">{</span>
+  <span class="k">class</span> <span class="nc">Close</span> <span class="k">extends</span> <span class="nc">Object</span> <span class="o">{</span>
+    <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">var</span> <span class="n">n</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="k">_</span><span class="o">;</span>
+    <span class="o">&lt;</span><span class="n">accessor</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">n</span><span class="o">()</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span><span class="o">;</span>
+    <span class="o">&lt;</span><span class="n">accessor</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">n_=</span><span class="o">(</span><span class="n">x$1</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span> <span class="k">=</span> <span class="n">x$1</span><span class="o">;</span>
+    <span class="k">def</span> <span class="n">method</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span><span class="o">());</span>
+    <span class="k">def</span> <span class="n">function</span><span class="o">()</span><span class="k">:</span> <span class="kt">Function1</span> <span class="o">=</span> <span class="o">(</span><span class="k">new</span> <span class="o">&lt;</span><span class="nc">$anon</span><span class="k">:</span> <span class="kt">Function1&gt;</span><span class="o">(</span><span class="kt">Close.this</span><span class="o">)</span><span class="kt">:</span> <span class="kt">Function1</span><span class="o">);</span>
+    <span class="k">def</span> <span class="n">closure</span><span class="o">()</span><span class="k">:</span> <span class="kt">Function1</span> <span class="o">=</span> <span class="o">(</span><span class="k">new</span> <span class="o">&lt;</span><span class="nc">$anon</span><span class="k">:</span> <span class="kt">Function1&gt;</span><span class="o">(</span><span class="kt">Close.this</span><span class="o">)</span><span class="kt">:</span> <span class="kt">Function1</span><span class="o">);</span>
+    <span class="k">def</span> <span class="n">mixed</span><span class="o">(</span><span class="n">m</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Function1</span> <span class="o">=</span> <span class="o">(</span><span class="k">new</span> <span class="o">&lt;</span><span class="nc">$anon</span><span class="k">:</span> <span class="kt">Function1&gt;</span><span class="o">(</span><span class="kt">Close.this</span><span class="o">,</span> <span class="kt">m</span><span class="o">)</span><span class="k">:</span> <span class="kt">Function1</span><span class="o">);</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;()</span><span class="k">:</span> <span class="kt">Close</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="nc">Close</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span> <span class="k">=</span> <span class="mi">5</span><span class="o">;</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">};</span>
+  <span class="nd">@SerialVersionUID</span><span class="o">(</span><span class="n">value</span> <span class="k">=</span> <span class="mi">0</span><span class="o">)</span> <span class="k">final</span> <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="k">class</span> <span class="nc">anonfun$function$1</span> <span class="k">extends</span> <span class="n">scala</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="nc">AbstractFunction1$mcII$sp</span> <span class="k">with</span> <span class="nc">Serializable</span> <span class="o">{</span>
+    <span class="k">final</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">anonfun$function$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+    <span class="o">&lt;</span><span class="n">specialized</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="mi">5</span><span class="o">);</span>
+    <span class="k">final</span> <span class="o">&lt;</span><span class="n">bridge</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">artifact</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">v1</span><span class="k">:</span> <span class="kt">Object</span><span class="o">)</span><span class="k">:</span> <span class="kt">Object</span> <span class="o">=</span> <span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">box</span><span class="o">(</span><span class="n">anonfun$function$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply</span><span class="o">(</span><span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">unbox</span><span class="o">(</span><span class="n">v1</span><span class="o">)));</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;(</span><span class="nc">$outer</span><span class="k">:</span> <span class="kt">Close</span><span class="o">)</span><span class="k">:</span> <span class="kt">&lt;$anon:</span> <span class="kt">Function1&gt;</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="n">anonfun$function$1</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">};</span>
+  <span class="nd">@SerialVersionUID</span><span class="o">(</span><span class="n">value</span> <span class="k">=</span> <span class="mi">0</span><span class="o">)</span> <span class="k">final</span> <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="k">class</span> <span class="nc">anonfun$closure$1</span> <span class="k">extends</span> <span class="n">scala</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="nc">AbstractFunction1$mcII$sp</span> <span class="k">with</span> <span class="nc">Serializable</span> <span class="o">{</span>
+    <span class="k">final</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+    <span class="o">&lt;</span><span class="n">specialized</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="nc">$outer</span><span class="o">.</span><span class="n">n</span><span class="o">());</span>
+    <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">paramaccessor</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">artifact</span><span class="o">&gt;</span> <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">val</span> <span class="nc">$outer</span><span class="k">:</span> <span class="kt">Close</span> <span class="o">=</span> <span class="k">_</span><span class="o">;</span>
+    <span class="k">final</span> <span class="o">&lt;</span><span class="n">bridge</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">artifact</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">v1</span><span class="k">:</span> <span class="kt">Object</span><span class="o">)</span><span class="k">:</span> <span class="kt">Object</span> <span class="o">=</span> <span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">box</span><span class="o">(</span><span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply</span><span class="o">(</span><span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">unbox</span><span class="o">(</span><span class="n">v1</span><span class="o">)));</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;(</span><span class="nc">$outer</span><span class="k">:</span> <span class="kt">Close</span><span class="o">)</span><span class="k">:</span> <span class="kt">&lt;$anon:</span> <span class="kt">Function1&gt;</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="k">if</span> <span class="o">(</span><span class="nc">$outer</span><span class="o">.</span><span class="n">eq</span><span class="o">(</span><span class="kc">null</span><span class="o">))</span>
+        <span class="k">throw</span> <span class="kc">null</span>
+      <span class="k">else</span>
+        <span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="nc">$outer</span> <span class="k">=</span> <span class="nc">$outer</span><span class="o">;</span>
+      <span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">};</span>
+  <span class="nd">@SerialVersionUID</span><span class="o">(</span><span class="n">value</span> <span class="k">=</span> <span class="mi">0</span><span class="o">)</span> <span class="k">final</span> <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="k">class</span> <span class="nc">anonfun$mixed$1</span> <span class="k">extends</span> <span class="n">scala</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="nc">AbstractFunction1$mcII$sp</span> <span class="k">with</span> <span class="nc">Serializable</span> <span class="o">{</span>
+    <span class="k">final</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+    <span class="o">&lt;</span><span class="n">specialized</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">m$1</span><span class="o">);</span>
+    <span class="k">final</span> <span class="o">&lt;</span><span class="n">bridge</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">artifact</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">v1</span><span class="k">:</span> <span class="kt">Object</span><span class="o">)</span><span class="k">:</span> <span class="kt">Object</span> <span class="o">=</span> <span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">box</span><span class="o">(</span><span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply</span><span class="o">(</span><span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">unbox</span><span class="o">(</span><span class="n">v1</span><span class="o">)));</span>
+    <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">paramaccessor</span><span class="o">&gt;</span> <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">val</span> <span class="n">m$1</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="k">_</span><span class="o">;</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;(</span><span class="nc">$outer</span><span class="k">:</span> <span class="kt">Close</span><span class="o">,</span> <span class="n">m$1</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">&lt;$anon:</span> <span class="kt">Function1&gt;</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">m$1</span> <span class="k">=</span> <span class="n">m$1</span><span class="o">;</span>
+      <span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span></code></pre></figure>
+
+<p>So closure is transformed to an inner class with an <em>apply</em> method. For closure, the outer class object is passed into the closure inner class when constructed if any class member variable is referenced. So the closure is serializable only if the outer class is serializable. Otherwise, if a closure depends only on some local variables, then only these variables are passed into the closure when constructed. So one way to avoid serializing all members of outer class is to copy the necessary member variables to local ones.</p>
+
+<p>What if a closure depends on some variables of its outer <strong><em>object</em></strong>. See,</p>
+
+<figure class="highlight"><pre><code class="language-scala" data-lang="scala"><span class="k">object</span> <span class="nc">Close</span> <span class="o">{</span>
+  <span class="k">var</span> <span class="n">n</span> <span class="k">=</span> <span class="mi">5</span>
+  <span class="k">def</span> <span class="n">method</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=</span> <span class="n">i</span><span class="o">+</span><span class="n">n</span>
+  <span class="k">def</span> <span class="n">function</span> <span class="k">=</span> <span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">i</span><span class="o">+</span><span class="mi">5</span>
+  <span class="k">def</span> <span class="n">closure</span> <span class="k">=</span> <span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">i</span><span class="o">+</span><span class="n">n</span>
+  <span class="k">def</span> <span class="n">mixed</span><span class="o">(</span><span class="n">m</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=</span> <span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">i</span><span class="o">+</span><span class="n">m</span>
+<span class="o">}</span></code></pre></figure>
+
+<p>It is transformed to</p>
+
+<figure class="highlight"><pre><code class="language-scala" data-lang="scala"><span class="k">package</span> <span class="err">&lt;</span><span class="nn">empty</span><span class="o">&gt;</span> <span class="o">{</span>
+  <span class="k">object</span> <span class="nc">Close</span> <span class="k">extends</span> <span class="nc">Object</span> <span class="o">{</span>
+    <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">var</span> <span class="n">n</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="k">_</span><span class="o">;</span>
+    <span class="o">&lt;</span><span class="n">accessor</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">n</span><span class="o">()</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span><span class="o">;</span>
+    <span class="o">&lt;</span><span class="n">accessor</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">n_=</span><span class="o">(</span><span class="n">x$1</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span> <span class="k">=</span> <span class="n">x$1</span><span class="o">;</span>
+    <span class="k">def</span> <span class="n">method</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span><span class="o">());</span>
+    <span class="k">def</span> <span class="n">function</span><span class="o">()</span><span class="k">:</span> <span class="kt">Function1</span> <span class="o">=</span> <span class="o">(</span><span class="k">new</span> <span class="o">&lt;</span><span class="nc">$anon</span><span class="k">:</span> <span class="kt">Function1&gt;</span><span class="o">()</span><span class="kt">:</span> <span class="kt">Function1</span><span class="o">);</span>
+    <span class="k">def</span> <span class="n">closure</span><span class="o">()</span><span class="k">:</span> <span class="kt">Function1</span> <span class="o">=</span> <span class="o">(</span><span class="k">new</span> <span class="o">&lt;</span><span class="nc">$anon</span><span class="k">:</span> <span class="kt">Function1&gt;</span><span class="o">()</span><span class="kt">:</span> <span class="kt">Function1</span><span class="o">);</span>
+    <span class="k">def</span> <span class="n">mixed</span><span class="o">(</span><span class="n">m</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Function1</span> <span class="o">=</span> <span class="o">(</span><span class="k">new</span> <span class="o">&lt;</span><span class="nc">$anon</span><span class="k">:</span> <span class="kt">Function1&gt;</span><span class="o">(</span><span class="kt">m</span><span class="o">)</span><span class="kt">:</span> <span class="kt">Function1</span><span class="o">);</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;()</span><span class="k">:</span> <span class="kt">Close.</span><span class="k">type</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="nc">Close</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span> <span class="k">=</span> <span class="mi">5</span><span class="o">;</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">};</span>
+  <span class="nd">@SerialVersionUID</span><span class="o">(</span><span class="n">value</span> <span class="k">=</span> <span class="mi">0</span><span class="o">)</span> <span class="k">final</span> <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="k">class</span> <span class="nc">anonfun$function$1</span> <span class="k">extends</span> <span class="n">scala</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="nc">AbstractFunction1$mcII$sp</span> <span class="k">with</span> <span class="nc">Serializable</span> <span class="o">{</span>
+    <span class="k">final</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">anonfun$function$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+    <span class="o">&lt;</span><span class="n">specialized</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="mi">5</span><span class="o">);</span>
+    <span class="k">final</span> <span class="o">&lt;</span><span class="n">bridge</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">artifact</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">v1</span><span class="k">:</span> <span class="kt">Object</span><span class="o">)</span><span class="k">:</span> <span class="kt">Object</span> <span class="o">=</span> <span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">box</span><span class="o">(</span><span class="n">anonfun$function$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply</span><span class="o">(</span><span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">unbox</span><span class="o">(</span><span class="n">v1</span><span class="o">)));</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;()</span><span class="k">:</span> <span class="kt">&lt;$anon:</span> <span class="kt">Function1&gt;</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="n">anonfun$function$1</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">};</span>
+  <span class="nd">@SerialVersionUID</span><span class="o">(</span><span class="n">value</span> <span class="k">=</span> <span class="mi">0</span><span class="o">)</span> <span class="k">final</span> <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="k">class</span> <span class="nc">anonfun$closure$1</span> <span class="k">extends</span> <span class="n">scala</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="nc">AbstractFunction1$mcII$sp</span> <span class="k">with</span> <span class="nc">Serializable</span> <span class="o">{</span>
+    <span class="k">final</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+    <span class="o">&lt;</span><span class="n">specialized</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="nc">Close</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">n</span><span class="o">());</span>
+    <span class="k">final</span> <span class="o">&lt;</span><span class="n">bridge</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">artifact</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">v1</span><span class="k">:</span> <span class="kt">Object</span><span class="o">)</span><span class="k">:</span> <span class="kt">Object</span> <span class="o">=</span> <span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">box</span><span class="o">(</span><span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply</span><span class="o">(</span><span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">unbox</span><span class="o">(</span><span class="n">v1</span><span class="o">)));</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;()</span><span class="k">:</span> <span class="kt">&lt;$anon:</span> <span class="kt">Function1&gt;</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="n">anonfun$closure$1</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">};</span>
+  <span class="nd">@SerialVersionUID</span><span class="o">(</span><span class="n">value</span> <span class="k">=</span> <span class="mi">0</span><span class="o">)</span> <span class="k">final</span> <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="k">class</span> <span class="nc">anonfun$mixed$1</span> <span class="k">extends</span> <span class="n">scala</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="nc">AbstractFunction1$mcII$sp</span> <span class="k">with</span> <span class="nc">Serializable</span> <span class="o">{</span>
+    <span class="k">final</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
+    <span class="o">&lt;</span><span class="n">specialized</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply$mcII$sp</span><span class="o">(</span><span class="n">i</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="n">i</span><span class="o">.+(</span><span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">m$1</span><span class="o">);</span>
+    <span class="k">final</span> <span class="o">&lt;</span><span class="n">bridge</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">artifact</span><span class="o">&gt;</span> <span class="k">def</span> <span class="n">apply</span><span class="o">(</span><span class="n">v1</span><span class="k">:</span> <span class="kt">Object</span><span class="o">)</span><span class="k">:</span> <span class="kt">Object</span> <span class="o">=</span> <span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">box</span><span class="o">(</span><span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">apply</span><span class="o">(</span><span class="n">scala</span><span class="o">.</span><span class="nc">Int</span><span class="o">.</span><span class="n">unbox</span><span class="o">(</span><span class="n">v1</span><span class="o">)));</span>
+    <span class="o">&lt;</span><span class="n">synthetic</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">paramaccessor</span><span class="o">&gt;</span> <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">val</span> <span class="n">m$1</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="k">_</span><span class="o">;</span>
+    <span class="k">def</span> <span class="o">&lt;</span><span class="n">init</span><span class="o">&gt;(</span><span class="n">m$1</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">&lt;$anon:</span> <span class="kt">Function1&gt;</span> <span class="o">=</span> <span class="o">{</span>
+      <span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">this</span><span class="o">.</span><span class="n">m$1</span> <span class="k">=</span> <span class="n">m$1</span><span class="o">;</span>
+      <span class="n">anonfun$mixed$1</span><span class="o">.</span><span class="k">super</span><span class="o">.&lt;</span><span class="n">init</span><span class="o">&gt;();</span>
+      <span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span></code></pre></figure>
+
+<p>The outer object is not passed by. The object’s member variable is used in the closure.</p>
+
+      </div>
+      
+      
+      <div id="disqus_thread"></div>
+      <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+      
+    </article>
+
+    <footer>
+      <span><a href="http://liyinhgqw.github.io">Desmond Li</a></span>
+      <span><a href="https://github.com/liyinhgqw/"><i class="fa fa-github-square"></i></a><a href="http://www.linkedin.com/in/liyinhgqw"><i class="fa fa-linkedin-square"></i></a></span>
+      <span>&copy; 2016</span>
+    </footer>
+  </body>
+</html>

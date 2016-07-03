@@ -1,14 +1,13 @@
 ---
 title:  "Scala Closure's True Self"
-date:   2016-07-03 22:43:00
 categories: scala
 ---
 
 When I write spark program, I often deal with transformation functions. These functions need to be serialized to enable parallelization. Scala uses lamda closure as syntax suger to write transformation functions. But it really frustrates me when the closure cannot be serialized which causes runtime failure of spark program.
 
-##Example code snippet
+## Example code snippet
 In order to figure out the true self of ***scala closure***, take the following code snippet as an [example](http://stackoverflow.com/questions/2670350/how-are-scala-closures-transformed-to-java-objects).
-```scala
+{% highlight scala %}
 class Close {
   var n = 5
   def method(i: Int) = i+n
@@ -16,29 +15,31 @@ class Close {
   def closure = (i: Int) => i+n
   def mixed(m: Int) = (i: Int) => i+m
 }
-```
+{% endhighlight %}
 
-##Methods to dig into the secret
+## Methods to dig into the secret
 There is something we should know when debuging scala program. Sometimes we need to find out the java code it transform to or even byte code that is compiled to.
- * **source code -> class**: 
- ```bash
-    scalac Class.scala
- ```
- * **source code -> class with syntax tree parsed info**: 
- ```bash
-    scalac -Xprint:all Class.scala
- ```
- * **class -> decompiled signature**: 
- ```bash
-    scalap / javap Class
- ```
- * **class -> byte code**: 
- ```bash
-    javap -c Class
- ```
 
-##Parsed synctax tree reveals the truth
-```scala
+ * **source code -> class**:
+{% highlight bash %}
+    $ scalac Class.scala
+{% endhighlight %}
+ * **source code -> class (with syntax tree parsed info printed)**:
+{% highlight bash %}
+    $ scalac -Xprint:all Class.scala
+{% endhighlight %}
+ * **class -> decompiled signature**:
+{% highlight bash %}
+    $ scalap / javap Class
+{% endhighlight %}
+ * **class -> byte code**:
+{% highlight bash %}
+    $ javap -c Class
+{% endhighlight %}
+
+## Parsed syntax tree reveals the truth
+The syntax tree of the example class is as follows:
+{% highlight scala %}
 package <empty> {
   class Close extends Object {
     private[this] var n: Int = _;
@@ -89,13 +90,13 @@ package <empty> {
     }
   }
 }
-```
+{% endhighlight %}
 
 So closure is transformed to an inner class with an *apply* method. For closure, the outer class object is passed into the closure inner class when constructed if any class member variable is referenced. So the closure is serializable only if the outer class is serializable. Otherwise, if a closure depends only on some local variables, then only these variables are passed into the closure when constructed. So one way to avoid serializing all members of outer class is to copy the necessary member variables to local ones.
 
 What if a closure depends on some variables of its outer ***object***. See,
 
-```scala
+{% highlight scala %}
 object Close {
   var n = 5
   def method(i: Int) = i+n
@@ -103,9 +104,10 @@ object Close {
   def closure = (i: Int) => i+n
   def mixed(m: Int) = (i: Int) => i+m
 }
+{% endhighlight %}
 
-It is transformed to 
-```scala
+It is transformed to
+{% highlight scala %}
 package <empty> {
   object Close extends Object {
     private[this] var n: Int = _;
@@ -151,5 +153,6 @@ package <empty> {
     }
   }
 }
-```
+{% endhighlight %}
+
 The outer object is not passed by. The object's member variable is used in the closure.
